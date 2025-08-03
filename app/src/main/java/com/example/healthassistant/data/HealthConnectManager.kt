@@ -11,6 +11,7 @@ import androidx.health.connect.client.aggregate.AggregationResult
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.BloodPressureRecord
 import androidx.health.connect.client.records.BodyFatRecord
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HeightRecord
@@ -278,6 +279,78 @@ class HealthConnectManager(private val context: Context) {
         return null
     }
 
+    suspend fun getTodayDistance(): Double {
+        return try {
+            val today = LocalDateTime.now().toLocalDate()
+            val start = today.atStartOfDay(ZoneId.systemDefault()).toInstant()
+            val end = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant()
+            
+            val request = ReadRecordsRequest(
+                recordType = DistanceRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(start, end)
+            )
+            val response = healthConnectClient.readRecords(request)
+            
+            response.records.sumOf { it.distance.inKilometers }
+        } catch (e: Exception) {
+            0.0
+        }
+    }
+
+    suspend fun getTodayGoalsProgress(): GoalsProgressData {
+        return try {
+            val stepCount = getTodaySteps()
+            val calories = getTodayCalories()
+            val exerciseSessions = getTodayExerciseSessions()
+            
+            // Calculate active minutes from exercise sessions
+            val activeMinutes = exerciseSessions.sumOf { 
+                Duration.between(it.startTime, it.endTime).toMinutes()
+            }
+            
+            GoalsProgressData(
+                stepGoal = 10000,
+                stepCurrent = stepCount,
+                calorieGoal = 2200.0,
+                calorieCurrent = calories,
+                activeMinuteGoal = 30,
+                activeMinuteCurrent = activeMinutes.toInt()
+            )
+        } catch (e: Exception) {
+            GoalsProgressData(
+                stepGoal = 10000,
+                stepCurrent = 0,
+                calorieGoal = 2200.0,
+                calorieCurrent = 0.0,
+                activeMinuteGoal = 30,
+                activeMinuteCurrent = 0
+            )
+        }
+    }
+
+    suspend fun getActivitySummary(): ActivitySummaryData {
+        return try {
+            val distance = getTodayDistance()
+            val exerciseSessions = getTodayExerciseSessions()
+            val activeMinutes = exerciseSessions.sumOf { 
+                Duration.between(it.startTime, it.endTime).toMinutes()
+            }.toInt()
+            
+            ActivitySummaryData(
+                distance = distance,
+                activeMinutes = activeMinutes,
+                workoutCount = exerciseSessions.size
+            )
+        } catch (e: Exception) {
+            ActivitySummaryData(
+                distance = 0.0,
+                activeMinutes = 0,
+                workoutCount = 0
+            )
+        }
+    }
+
+
     private fun isSupported() = Build.VERSION.SDK_INT >= MIN_SUPPORTED_SDK
 }
 
@@ -294,6 +367,22 @@ data class DetailedSleepData(
     val remSleep: Duration,
     val lightSleep: Duration
 )
+
+data class GoalsProgressData(
+    val stepGoal: Long,
+    val stepCurrent: Long,
+    val calorieGoal: Double,
+    val calorieCurrent: Double,
+    val activeMinuteGoal: Int,
+    val activeMinuteCurrent: Int
+)
+
+data class ActivitySummaryData(
+    val distance: Double,
+    val activeMinutes: Int,
+    val workoutCount: Int
+)
+
 
 enum class HealthConnectAvailability {
     INSTALLED,

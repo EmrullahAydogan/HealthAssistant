@@ -17,10 +17,13 @@ import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.WeightRecord
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.healthassistant.data.BodyCompositionData
 import com.example.healthassistant.data.DetailedSleepData
+import com.example.healthassistant.data.GoalsProgressData
+import com.example.healthassistant.data.ActivitySummaryData
 import com.example.healthassistant.data.HealthConnectAvailability
 import com.example.healthassistant.data.HealthConnectManager
 import kotlinx.coroutines.launch
@@ -38,6 +41,8 @@ data class HealthDataUiState(
     val oxygenSaturation: Double? = null,
     val bodyComposition: BodyCompositionData? = null,
     val detailedSleep: DetailedSleepData? = null,
+    val goalsProgress: GoalsProgressData? = null,
+    val activitySummary: ActivitySummaryData? = null,
     val availability: HealthConnectAvailability = HealthConnectAvailability.NOT_SUPPORTED,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
@@ -62,7 +67,8 @@ class HealthDataViewModel(
         HealthPermission.getReadPermission(OxygenSaturationRecord::class),
         HealthPermission.getReadPermission(WeightRecord::class),
         HealthPermission.getReadPermission(HeightRecord::class),
-        HealthPermission.getReadPermission(BodyFatRecord::class)
+        HealthPermission.getReadPermission(BodyFatRecord::class),
+        HealthPermission.getReadPermission(DistanceRecord::class)
     )
 
     init {
@@ -111,6 +117,8 @@ class HealthDataViewModel(
                 val oxygenSaturation = healthConnectManager.getLatestOxygenSaturation()
                 val bodyComposition = healthConnectManager.getBodyComposition()
                 val detailedSleep = healthConnectManager.getDetailedSleepData()
+                val goalsProgress = healthConnectManager.getTodayGoalsProgress()
+                val activitySummary = healthConnectManager.getActivitySummary()
                 
                 uiState = uiState.copy(
                     heartRate = heartRate,
@@ -123,6 +131,8 @@ class HealthDataViewModel(
                     oxygenSaturation = oxygenSaturation,
                     bodyComposition = bodyComposition,
                     detailedSleep = detailedSleep,
+                    goalsProgress = goalsProgress,
+                    activitySummary = activitySummary,
                     isLoading = false,
                     errorMessage = null
                 )

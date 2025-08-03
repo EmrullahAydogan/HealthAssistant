@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bloodtype
 import androidx.compose.material.icons.filled.Scale
 import androidx.compose.material.icons.filled.Nightlight
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.SmallFloatingActionButton
@@ -60,6 +62,8 @@ import com.example.healthassistant.ui.theme.onWarningContainer
 import com.example.healthassistant.ui.theme.warningContainer
 import com.example.healthassistant.data.BodyCompositionData
 import com.example.healthassistant.data.DetailedSleepData
+import com.example.healthassistant.data.GoalsProgressData
+import com.example.healthassistant.data.ActivitySummaryData
 import com.example.healthassistant.viewmodel.HealthDataViewModel
 import java.time.Duration
 import java.util.Locale
@@ -138,6 +142,8 @@ fun DashboardScreen(
                                 oxygenSaturation = uiState.oxygenSaturation,
                                 bodyComposition = uiState.bodyComposition,
                                 detailedSleep = uiState.detailedSleep,
+                                goalsProgress = uiState.goalsProgress,
+                                activitySummary = uiState.activitySummary,
                                 isLoading = uiState.isLoading,
                                 onAddWater = { viewModel.addWater() }
                             )
@@ -161,6 +167,8 @@ fun DashboardContent(
     oxygenSaturation: Double?,
     bodyComposition: BodyCompositionData?,
     detailedSleep: DetailedSleepData?,
+    goalsProgress: GoalsProgressData?,
+    activitySummary: ActivitySummaryData?,
     isLoading: Boolean,
     onAddWater: () -> Unit
 ) {
@@ -286,6 +294,22 @@ fun DashboardContent(
         if (detailedSleep != null || isLoading) {
             DetailedSleepCard(
                 detailedSleep = detailedSleep,
+                isLoading = isLoading
+            )
+        }
+
+        // Seventh row: Goals Progress
+        if (goalsProgress != null || isLoading) {
+            GoalsProgressCard(
+                goalsProgress = goalsProgress,
+                isLoading = isLoading
+            )
+        }
+
+        // Eighth row: Activity Summary
+        if (activitySummary != null || isLoading) {
+            ActivitySummaryCard(
+                activitySummary = activitySummary,
                 isLoading = isLoading
             )
         }
@@ -691,3 +715,201 @@ fun SleepStageItem(
         )
     }
 }
+
+@Composable
+fun GoalsProgressCard(
+    goalsProgress: GoalsProgressData?,
+    isLoading: Boolean
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.EmojiEvents,
+                    contentDescription = "Goals Progress",
+                    modifier = Modifier.size(24.dp),
+                    tint = Color(0xFFFFD700)
+                )
+                
+                Spacer(modifier = Modifier.width(8.dp))
+                
+                Text(
+                    text = "Daily Goals",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                GoalProgressItem(
+                    label = "Steps",
+                    current = if (isLoading) "..." else goalsProgress?.stepCurrent?.toString() ?: "0",
+                    goal = goalsProgress?.stepGoal?.toString() ?: "10000",
+                    progress = if (goalsProgress != null) (goalsProgress.stepCurrent.toFloat() / goalsProgress.stepGoal.toFloat()).coerceAtMost(1f) else 0f,
+                    isLoading = isLoading
+                )
+                
+                GoalProgressItem(
+                    label = "Calories",
+                    current = if (isLoading) "..." else goalsProgress?.let { String.format(Locale.US, "%.0f", it.calorieCurrent) } ?: "0",
+                    goal = goalsProgress?.let { String.format(Locale.US, "%.0f", it.calorieGoal) } ?: "2200",
+                    progress = if (goalsProgress != null) (goalsProgress.calorieCurrent.toFloat() / goalsProgress.calorieGoal.toFloat()).coerceAtMost(1f) else 0f,
+                    isLoading = isLoading
+                )
+                
+                GoalProgressItem(
+                    label = "Active Minutes",
+                    current = if (isLoading) "..." else goalsProgress?.activeMinuteCurrent?.toString() ?: "0",
+                    goal = goalsProgress?.activeMinuteGoal?.toString() ?: "30",
+                    progress = if (goalsProgress != null) (goalsProgress.activeMinuteCurrent.toFloat() / goalsProgress.activeMinuteGoal.toFloat()).coerceAtMost(1f) else 0f,
+                    isLoading = isLoading
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun GoalProgressItem(
+    label: String,
+    current: String,
+    goal: String,
+    progress: Float,
+    isLoading: Boolean
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "$current / $goal",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(4.dp))
+        
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .background(
+                    MaterialTheme.colorScheme.surfaceVariant,
+                    RoundedCornerShape(4.dp)
+                )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(if (isLoading) 0f else progress)
+                    .height(8.dp)
+                    .background(
+                        Color(0xFFFFD700),
+                        RoundedCornerShape(4.dp)
+                    )
+            )
+        }
+    }
+}
+
+@Composable
+fun ActivitySummaryCard(
+    activitySummary: ActivitySummaryData?,
+    isLoading: Boolean
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DirectionsRun,
+                    contentDescription = "Activity Summary",
+                    modifier = Modifier.size(24.dp),
+                    tint = Color(0xFF4CAF50)
+                )
+                
+                Spacer(modifier = Modifier.width(8.dp))
+                
+                Text(
+                    text = "Activity Summary",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                ActivityMetricItem(
+                    label = "Distance",
+                    value = if (isLoading) "..." else activitySummary?.let { String.format(Locale.US, "%.1f km", it.distance) } ?: "0.0 km"
+                )
+                
+                ActivityMetricItem(
+                    label = "Active Minutes",
+                    value = if (isLoading) "..." else activitySummary?.let { "${it.activeMinutes} min" } ?: "0 min"
+                )
+                
+                ActivityMetricItem(
+                    label = "Workouts",
+                    value = if (isLoading) "..." else activitySummary?.workoutCount?.toString() ?: "0"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ActivityMetricItem(
+    label: String,
+    value: String
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
