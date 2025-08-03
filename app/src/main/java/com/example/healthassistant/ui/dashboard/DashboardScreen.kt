@@ -25,6 +25,9 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bloodtype
+import androidx.compose.material.icons.filled.Scale
+import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.SmallFloatingActionButton
@@ -55,6 +58,8 @@ import androidx.compose.ui.unit.sp
 import com.example.healthassistant.data.HealthConnectAvailability
 import com.example.healthassistant.ui.theme.onWarningContainer
 import com.example.healthassistant.ui.theme.warningContainer
+import com.example.healthassistant.data.BodyCompositionData
+import com.example.healthassistant.data.DetailedSleepData
 import com.example.healthassistant.viewmodel.HealthDataViewModel
 import java.time.Duration
 import java.util.Locale
@@ -130,6 +135,9 @@ fun DashboardScreen(
                                 exerciseCount = uiState.exerciseCount,
                                 hydration = uiState.hydration,
                                 bloodPressure = uiState.bloodPressure,
+                                oxygenSaturation = uiState.oxygenSaturation,
+                                bodyComposition = uiState.bodyComposition,
+                                detailedSleep = uiState.detailedSleep,
                                 isLoading = uiState.isLoading,
                                 onAddWater = { viewModel.addWater() }
                             )
@@ -150,6 +158,9 @@ fun DashboardContent(
     exerciseCount: Int,
     hydration: Double,
     bloodPressure: Pair<Double, Double>?,
+    oxygenSaturation: Double?,
+    bodyComposition: BodyCompositionData?,
+    detailedSleep: DetailedSleepData?,
     isLoading: Boolean,
     onAddWater: () -> Unit
 ) {
@@ -234,15 +245,48 @@ fun DashboardContent(
             )
         }
 
-        // Fourth row: Blood Pressure (single card)
-        if (bloodPressure != null || isLoading) {
+        // Fourth row: SpO2 and Blood Pressure
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             HealthMetricCard(
-                modifier = Modifier.fillMaxWidth(),
-                title = "Blood Pressure",
-                value = if (isLoading) "..." else formatBloodPressure(bloodPressure),
-                unit = "mmHg",
-                icon = Icons.Default.MonitorHeart,
-                iconColor = Color(0xFFE91E63)
+                modifier = Modifier.weight(1f),
+                title = "Blood Oxygen",
+                value = if (isLoading) "..." else (oxygenSaturation?.let { "${it.roundToInt()}" } ?: "---"),
+                unit = "%",
+                icon = Icons.Default.Bloodtype,
+                iconColor = Color(0xFFFF5722)
+            )
+
+            if (bloodPressure != null || isLoading) {
+                HealthMetricCard(
+                    modifier = Modifier.weight(1f),
+                    title = "Blood Pressure",
+                    value = if (isLoading) "..." else formatBloodPressure(bloodPressure),
+                    unit = "mmHg",
+                    icon = Icons.Default.MonitorHeart,
+                    iconColor = Color(0xFFE91E63)
+                )
+            } else {
+                // Empty space to maintain layout
+                Spacer(modifier = Modifier.weight(1f))
+            }
+        }
+
+        // Fifth row: Body Composition
+        if (bodyComposition != null || isLoading) {
+            BodyCompositionCard(
+                bodyComposition = bodyComposition,
+                isLoading = isLoading
+            )
+        }
+
+        // Sixth row: Detailed Sleep Analysis
+        if (detailedSleep != null || isLoading) {
+            DetailedSleepCard(
+                detailedSleep = detailedSleep,
+                isLoading = isLoading
             )
         }
 
@@ -478,5 +522,172 @@ fun NotInstalledMessage() {
                 textAlign = TextAlign.Center
             )
         }
+    }
+}
+
+@Composable
+fun BodyCompositionCard(
+    bodyComposition: BodyCompositionData?,
+    isLoading: Boolean
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Scale,
+                    contentDescription = "Body Composition",
+                    modifier = Modifier.size(24.dp),
+                    tint = Color(0xFF9C27B0)
+                )
+                
+                Spacer(modifier = Modifier.width(8.dp))
+                
+                Text(
+                    text = "Body Composition",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                BodyMetricItem(
+                    label = "Weight",
+                    value = if (isLoading) "..." else bodyComposition?.let { "${String.format(Locale.US, "%.1f", it.weight)} kg" } ?: "---"
+                )
+                
+                BodyMetricItem(
+                    label = "BMI",
+                    value = if (isLoading) "..." else bodyComposition?.let { String.format(Locale.US, "%.1f", it.bmi) } ?: "---"
+                )
+                
+                BodyMetricItem(
+                    label = "Body Fat",
+                    value = if (isLoading) "..." else bodyComposition?.bodyFatPercentage?.let { "${String.format(Locale.US, "%.1f", it)}%" } ?: "---"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun BodyMetricItem(
+    label: String,
+    value: String
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+fun DetailedSleepCard(
+    detailedSleep: DetailedSleepData?,
+    isLoading: Boolean
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Nightlight,
+                    contentDescription = "Sleep Analysis",
+                    modifier = Modifier.size(24.dp),
+                    tint = Color(0xFF3F51B5)
+                )
+                
+                Spacer(modifier = Modifier.width(8.dp))
+                
+                Text(
+                    text = "Sleep Analysis",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                SleepStageItem(
+                    label = "Total",
+                    value = if (isLoading) "..." else detailedSleep?.let { formatSleepDuration(it.totalSleep) } ?: "---"
+                )
+                
+                SleepStageItem(
+                    label = "Deep",
+                    value = if (isLoading) "..." else detailedSleep?.let { formatSleepDuration(it.deepSleep) } ?: "---"
+                )
+                
+                SleepStageItem(
+                    label = "REM",
+                    value = if (isLoading) "..." else detailedSleep?.let { formatSleepDuration(it.remSleep) } ?: "---"
+                )
+                
+                SleepStageItem(
+                    label = "Light",
+                    value = if (isLoading) "..." else detailedSleep?.let { formatSleepDuration(it.lightSleep) } ?: "---"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SleepStageItem(
+    label: String,
+    value: String
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

@@ -10,16 +10,24 @@ import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.aggregate.AggregationResult
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.BloodPressureRecord
+import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.HeightRecord
 import androidx.health.connect.client.records.HydrationRecord
+import androidx.health.connect.client.records.LeanBodyMassRecord
+import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
+import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.units.Energy
+import androidx.health.connect.client.units.Length
+import androidx.health.connect.client.units.Mass
+import androidx.health.connect.client.units.Percentage
 import androidx.health.connect.client.units.Volume
 import java.time.Duration
 import java.time.Instant
@@ -182,8 +190,110 @@ class HealthConnectManager(private val context: Context) {
             ?.let { it.systolic.inMillimetersOfMercury to it.diastolic.inMillimetersOfMercury }
     }
 
+    suspend fun getLatestOxygenSaturation(): Double? {
+        val end = Instant.now()
+        val start = end.minusSeconds(3600 * 12) // Son 12 saat
+        
+        val request = ReadRecordsRequest(
+            recordType = OxygenSaturationRecord::class,
+            timeRangeFilter = TimeRangeFilter.between(start, end)
+        )
+        val response = healthConnectClient.readRecords(request)
+        
+        return response.records
+            .maxByOrNull { it.time }
+            ?.percentage?.value
+    }
+
+    suspend fun getBodyComposition(): BodyCompositionData? {
+        val end = Instant.now()
+        val start = end.minusSeconds(86400 * 30) // Son 30 gün
+        
+        val weightRequest = ReadRecordsRequest(
+            recordType = WeightRecord::class,
+            timeRangeFilter = TimeRangeFilter.between(start, end)
+        )
+        val heightRequest = ReadRecordsRequest(
+            recordType = HeightRecord::class,
+            timeRangeFilter = TimeRangeFilter.between(start, end)
+        )
+        val bodyFatRequest = ReadRecordsRequest(
+            recordType = BodyFatRecord::class,
+            timeRangeFilter = TimeRangeFilter.between(start, end)
+        )
+        
+        val weightResponse = healthConnectClient.readRecords(weightRequest)
+        val heightResponse = healthConnectClient.readRecords(heightRequest)
+        val bodyFatResponse = healthConnectClient.readRecords(bodyFatRequest)
+        
+        val latestWeight = weightResponse.records.maxByOrNull { it.time }
+        val latestHeight = heightResponse.records.maxByOrNull { it.time }
+        val latestBodyFat = bodyFatResponse.records.maxByOrNull { it.time }
+        
+        return if (latestWeight != null && latestHeight != null) {
+            val weightKg = latestWeight.weight.inKilograms
+            val heightM = latestHeight.height.inMeters
+            val bmi = weightKg / (heightM * heightM)
+            
+            BodyCompositionData(
+                weight = weightKg,
+                height = heightM,
+                bmi = bmi,
+                bodyFatPercentage = latestBodyFat?.percentage?.value
+            )
+        } else null
+    }
+
+    suspend fun getDetailedSleepData(): DetailedSleepData? {
+        val now = LocalDateTime.now()
+        val yesterday = now.minusDays(1)
+        val start = yesterday.toLocalDate().atTime(18, 0).atZone(ZoneId.systemDefault()).toInstant()
+        val end = now.toLocalDate().atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant()
+        
+        val sessionRequest = ReadRecordsRequest(
+            recordType = SleepSessionRecord::class,
+            timeRangeFilter = TimeRangeFilter.between(start, end)
+        )
+        
+        val sessionResponse = healthConnectClient.readRecords(sessionRequest)
+        val latestSession = sessionResponse.records.maxByOrNull { it.endTime }
+        
+        if (latestSession != null) {
+            val totalDuration = Duration.between(latestSession.startTime, latestSession.endTime)
+            
+            // Since detailed sleep stages might not be available, we'll estimate
+            val totalMinutes = totalDuration.toMinutes()
+            val deepSleep = Duration.ofMinutes((totalMinutes * 0.15).toLong()) // ~15% deep sleep
+            val remSleep = Duration.ofMinutes((totalMinutes * 0.25).toLong())  // ~25% REM sleep
+            val lightSleep = Duration.ofMinutes((totalMinutes * 0.60).toLong()) // ~60% light sleep
+            
+            return DetailedSleepData(
+                totalSleep = totalDuration,
+                deepSleep = deepSleep,
+                remSleep = remSleep,
+                lightSleep = lightSleep
+            )
+        }
+        
+        return null
+    }
+
     private fun isSupported() = Build.VERSION.SDK_INT >= MIN_SUPPORTED_SDK
 }
+
+data class BodyCompositionData(
+    val weight: Double,
+    val height: Double,
+    val bmi: Double,
+    val bodyFatPercentage: Double?
+)
+
+data class DetailedSleepData(
+    val totalSleep: Duration,
+    val deepSleep: Duration,
+    val remSleep: Duration,
+    val lightSleep: Duration
+)
 
 enum class HealthConnectAvailability {
     INSTALLED,

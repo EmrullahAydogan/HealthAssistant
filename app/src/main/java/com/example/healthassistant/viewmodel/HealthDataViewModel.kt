@@ -7,14 +7,20 @@ import androidx.compose.runtime.setValue
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.BloodPressureRecord
+import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.HeightRecord
 import androidx.health.connect.client.records.HydrationRecord
+import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
+import androidx.health.connect.client.records.WeightRecord
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.healthassistant.data.BodyCompositionData
+import com.example.healthassistant.data.DetailedSleepData
 import com.example.healthassistant.data.HealthConnectAvailability
 import com.example.healthassistant.data.HealthConnectManager
 import kotlinx.coroutines.launch
@@ -29,6 +35,9 @@ data class HealthDataUiState(
     val exerciseCount: Int = 0,
     val hydration: Double = 0.0,
     val bloodPressure: Pair<Double, Double>? = null,
+    val oxygenSaturation: Double? = null,
+    val bodyComposition: BodyCompositionData? = null,
+    val detailedSleep: DetailedSleepData? = null,
     val availability: HealthConnectAvailability = HealthConnectAvailability.NOT_SUPPORTED,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
@@ -49,7 +58,11 @@ class HealthDataViewModel(
         HealthPermission.getReadPermission(SleepSessionRecord::class),
         HealthPermission.getReadPermission(ExerciseSessionRecord::class),
         HealthPermission.getReadPermission(HydrationRecord::class),
-        HealthPermission.getReadPermission(BloodPressureRecord::class)
+        HealthPermission.getReadPermission(BloodPressureRecord::class),
+        HealthPermission.getReadPermission(OxygenSaturationRecord::class),
+        HealthPermission.getReadPermission(WeightRecord::class),
+        HealthPermission.getReadPermission(HeightRecord::class),
+        HealthPermission.getReadPermission(BodyFatRecord::class)
     )
 
     init {
@@ -95,6 +108,9 @@ class HealthDataViewModel(
                 val exerciseSessions = healthConnectManager.getTodayExerciseSessions()
                 val hydration = healthConnectManager.getTodayHydration()
                 val bloodPressure = healthConnectManager.getLatestBloodPressure()
+                val oxygenSaturation = healthConnectManager.getLatestOxygenSaturation()
+                val bodyComposition = healthConnectManager.getBodyComposition()
+                val detailedSleep = healthConnectManager.getDetailedSleepData()
                 
                 uiState = uiState.copy(
                     heartRate = heartRate,
@@ -104,6 +120,9 @@ class HealthDataViewModel(
                     exerciseCount = exerciseSessions.size,
                     hydration = hydration,
                     bloodPressure = bloodPressure,
+                    oxygenSaturation = oxygenSaturation,
+                    bodyComposition = bodyComposition,
+                    detailedSleep = detailedSleep,
                     isLoading = false,
                     errorMessage = null
                 )
