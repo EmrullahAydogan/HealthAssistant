@@ -62,6 +62,18 @@ dependencies {
     // Icons
     implementation("androidx.compose.material:material-icons-extended:1.5.15")
     
+    // MediaPipe LLM
+    implementation("com.google.mediapipe:tasks-genai:0.10.25")
+    
+    // Work Manager for downloads
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    
+    // Gson for JSON parsing
+    implementation("com.google.code.gson:gson:2.10.1")
+    
+    // Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
