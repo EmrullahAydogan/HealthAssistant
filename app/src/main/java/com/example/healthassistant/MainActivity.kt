@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
         
         healthConnectManager = HealthConnectManager(this)
         llmManager = LLMManager(this)
-        healthDataViewModel = HealthDataViewModel(healthConnectManager)
+        healthDataViewModel = HealthDataViewModel(healthConnectManager, llmManager)
         modelsViewModel = ModelsViewModel(this, llmManager)
         
         enableEdgeToEdge()

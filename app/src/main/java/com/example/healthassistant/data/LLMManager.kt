@@ -263,36 +263,113 @@ class LLMManager(private val context: Context) {
         }
     }
     
-    suspend fun generateHealthReport(healthData: String): String? {
-        return try {
-            val model = _selectedModel.value ?: return null
-            val instance = model.instance as? LlmModelInstance ?: return null
+    suspend fun generateHealthReport(
+        healthData: String,
+        onPartialResult: (String, Boolean) -> Unit
+    ) {
+        try {
+            Log.d(TAG, "=== generateHealthReport called ===")
+            
+            val model = _selectedModel.value ?: run {
+                Log.e(TAG, "No model selected!")
+                onPartialResult("No model selected. Please select an LLM model first.", true)
+                return
+            }
+            Log.d(TAG, "Selected model: ${model.name}")
+            
+            val instance = model.instance as? LlmModelInstance ?: run {
+                Log.e(TAG, "Model not initialized! Model: ${model.name}")
+                onPartialResult("Model not initialized. Please initialize the model first.", true)
+                return
+            }
+            Log.d(TAG, "Model instance found: ${model.name}")
             
             val prompt = """
-                Sen sağlık verilerini analiz eden bir AI asistanısın. Aşağıdaki sağlık verilerini analiz et ve kullanıcıya kısa, anlaşılır bir rapor sun:
-
-                Sağlık Verileri:
+                🏥 **HEALTH ASSISTANT AI** 🏥
+                
+                Hello! I'm your personal health data analyst. I specialize in interpreting wearable sensor data to provide you with actionable insights about your health and wellness.
+                
+                📊 **ANALYZING YOUR HEALTH DATA:**
                 $healthData
-
-                Lütfen şu noktalara odaklan:
-                1. Genel sağlık durumu değerlendirmesi
-                2. Dikkat edilmesi gereken noktalar
-                3. Basit öneriler
-                4. Olumlu yönler
-
-                Raporu Türkçe, kısa ve anlaşılır bir şekilde hazırla.
+                
+                📋 **MY ANALYSIS APPROACH:**
+                I'll examine your data using evidence-based health metrics and provide you with a comprehensive yet easy-to-understand report.
+                
+                Please provide your analysis in the following structured format:
+                
+                🎯 **OVERALL HEALTH STATUS**
+                • [Brief assessment of current health state]
+                
+                ⚡ **KEY HIGHLIGHTS**
+                • [2-3 positive findings from the data]
+                
+                ⚠️ **AREAS FOR ATTENTION**
+                • [Any metrics that need monitoring or improvement]
+                
+                💡 **SMART RECOMMENDATIONS**
+                • [3-4 specific, actionable suggestions]
+                
+                🏆 **CELEBRATION WORTHY**
+                • [Achievements and positive trends to acknowledge]
+                
+                📈 **HEALTH INSIGHTS**
+                • [Any interesting patterns or correlations in the data]
+                
+                Use emojis, bullet points, and clear formatting. Be encouraging yet honest. Focus on actionable insights rather than medical diagnosis.
             """.trimIndent()
             
-            // Gallery approach: Use session for inference - check API changes
-            Log.d(TAG, "Generating response with session, prompt length: ${prompt.length}")
+            Log.d(TAG, "Starting async health report generation, prompt length: ${prompt.length}")
+            
+            // Gallery approach: Use async streaming for real-time updates
             instance.session.addQueryChunk(prompt)
-            val response = instance.session.generateResponse()
-            Log.d(TAG, "Response generated successfully, length: ${response?.length ?: 0}")
-            response
+            
+            var accumulatedResult = StringBuilder()
+            
+            val resultCallback: (String, Boolean) -> Unit = { partialResult: String, done: Boolean ->
+                Log.d(TAG, "=== LLM Callback ===")
+                Log.d(TAG, "done: $done, partial length: ${partialResult.length}")
+                Log.d(TAG, "partial content: '${partialResult.take(50)}'")
+                
+                // MediaPipe gives incremental chunks - accumulate them
+                if (partialResult.isNotBlank()) {
+                    accumulatedResult.append(partialResult)
+                    Log.d(TAG, "Accumulated total length: ${accumulatedResult.length}")
+                }
+                
+                if (done) {
+                    val finalResult = accumulatedResult.toString()
+                    Log.d(TAG, "FINAL RESULT - length: ${finalResult.length}")
+                    Log.d(TAG, "Final preview: ${finalResult.take(200)}")
+                    
+                    if (finalResult.isNotBlank()) {
+                        onPartialResult(finalResult, true)
+                    } else {
+                        onPartialResult("No response generated. Please try again.", true)
+                    }
+                }
+                
+                Log.d(TAG, "Callback processing completed")
+            }
+            
+            // Use async streaming like Gallery
+            instance.session.generateResponseAsync(resultCallback)
             
         } catch (e: Exception) {
             Log.e(TAG, "Error generating health report", e)
-            null
+            onPartialResult("Error generating report: ${e.message}", true)
+        }
+    }
+    
+    fun cancelHealthReportGeneration() {
+        try {
+            val model = _selectedModel.value
+            val instance = model?.instance as? LlmModelInstance
+            if (instance != null) {
+                Log.d(TAG, "Cancelling health report generation")
+                instance.session.cancelGenerateResponseAsync()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cancelling health report generation", e)
         }
     }
     

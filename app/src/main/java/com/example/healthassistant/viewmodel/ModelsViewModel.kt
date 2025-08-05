@@ -61,8 +61,13 @@ class ModelsViewModel(
     
     fun generateHealthReport(healthData: String, onResult: (String?) -> Unit) {
         viewModelScope.launch {
-            val result = llmManager.generateHealthReport(healthData)
-            onResult(result)
+            var finalResult: String? = null
+            llmManager.generateHealthReport(healthData) { partialResult, done ->
+                if (done) {
+                    finalResult = partialResult
+                    onResult(finalResult)
+                }
+            }
         }
     }
     

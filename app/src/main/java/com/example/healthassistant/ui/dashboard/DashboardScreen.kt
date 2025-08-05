@@ -10,14 +10,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Hotel
@@ -29,7 +33,8 @@ import androidx.compose.material.icons.filled.Bloodtype
 import androidx.compose.material.icons.filled.Scale
 import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.DirectionsRun
+import androidx.compose.material.icons.filled.AssignmentInd
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.SmallFloatingActionButton
@@ -46,6 +51,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -145,7 +153,16 @@ fun DashboardScreen(
                                 goalsProgress = uiState.goalsProgress,
                                 activitySummary = uiState.activitySummary,
                                 isLoading = uiState.isLoading,
-                                onAddWater = { viewModel.addWater() }
+                                onAddWater = { viewModel.addWater() },
+                                onGenerateReport = { viewModel.generateHealthReport() },
+                                isGeneratingReport = uiState.isGeneratingReport,
+                                healthReport = uiState.healthReport,
+                                canCancel = uiState.canCancelReport,
+                                onCancelReport = { viewModel.cancelHealthReport() },
+                                onReadReport = { viewModel.showHealthReport() },
+                                showReportDialog = uiState.showReportDialog,
+                                onHideReport = { viewModel.hideHealthReport() },
+                                onClearReport = { viewModel.clearHealthReport() }
                             )
                         }
                     }
@@ -170,7 +187,16 @@ fun DashboardContent(
     goalsProgress: GoalsProgressData?,
     activitySummary: ActivitySummaryData?,
     isLoading: Boolean,
-    onAddWater: () -> Unit
+    onAddWater: () -> Unit,
+    onGenerateReport: () -> Unit,
+    isGeneratingReport: Boolean,
+    healthReport: String?,
+    canCancel: Boolean,
+    onCancelReport: () -> Unit,
+    onReadReport: () -> Unit,
+    showReportDialog: Boolean,
+    onHideReport: () -> Unit,
+    onClearReport: () -> Unit
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -202,7 +228,7 @@ fun DashboardContent(
                 title = "Daily Steps",
                 value = if (isLoading) "..." else stepCount.toString(),
                 unit = "steps",
-                icon = Icons.Default.DirectionsWalk,
+                icon = Icons.AutoMirrored.Filled.DirectionsWalk,
                 iconColor = Color.Blue
             )
         }
@@ -313,6 +339,19 @@ fun DashboardContent(
                 isLoading = isLoading
             )
         }
+
+        // LLM Health Report Section
+        LLMHealthReportCard(
+            onGenerateReport = onGenerateReport,
+            isGeneratingReport = isGeneratingReport,
+            healthReport = healthReport,
+            canCancel = canCancel,
+            onCancelReport = onCancelReport,
+            onReadReport = onReadReport,
+            showReportDialog = showReportDialog,
+            onHideReport = onHideReport,
+            onClearReport = onClearReport
+        )
 
         if (isLoading) {
             Box(
@@ -850,7 +889,7 @@ fun ActivitySummaryCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(
-                    imageVector = Icons.Default.DirectionsRun,
+                    imageVector = Icons.AutoMirrored.Filled.DirectionsRun,
                     contentDescription = "Activity Summary",
                     modifier = Modifier.size(24.dp),
                     tint = Color(0xFF4CAF50)
@@ -911,5 +950,231 @@ fun ActivityMetricItem(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+@Composable
+fun LLMHealthReportCard(
+    onGenerateReport: () -> Unit,
+    isGeneratingReport: Boolean,
+    healthReport: String?,
+    canCancel: Boolean,
+    onCancelReport: () -> Unit,
+    onReadReport: () -> Unit,
+    showReportDialog: Boolean,
+    onHideReport: () -> Unit,
+    onClearReport: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AssignmentInd,
+                    contentDescription = "AI Sağlık Raporu",
+                    modifier = Modifier.size(24.dp),
+                    tint = Color(0xFF673AB7)
+                )
+                
+                Spacer(modifier = Modifier.width(8.dp))
+                
+                Text(
+                    text = "AI Health Report",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Text(
+                text = "Your selected LLM model can analyze your health data and generate a personalized health report.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Button Row - dynamically show available actions
+            when {
+                // When generating - show cancel and generate (disabled) buttons
+                isGeneratingReport -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (canCancel) {
+                            Button(
+                                onClick = onCancelReport,
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Cancel")
+                            }
+                        }
+                        
+                        Button(
+                            onClick = onGenerateReport,
+                            enabled = false,
+                            modifier = if (canCancel) Modifier.weight(1f) else Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White
+                                )
+                                Text("Generating Report...")
+                            }
+                        }
+                    }
+                }
+                
+                // When report exists - show read, generate new, and clear buttons
+                healthReport != null -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = onReadReport,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                        ) {
+                            Text("Read Report")
+                        }
+                        
+                        Button(
+                            onClick = onGenerateReport,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Generate New")
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Button(
+                        onClick = onClearReport,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Text("Clear Report")
+                    }
+                }
+                
+                // When no report - show only generate button
+                else -> {
+                    Button(
+                        onClick = onGenerateReport,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Generate Health Report")
+                    }
+                }
+            }
+        }
+    }
+    
+    // Health Report Dialog - controlled by showReportDialog state
+    if (showReportDialog && healthReport != null) {
+        HealthReportDialog(
+            report = healthReport,
+            onDismiss = onHideReport
+        )
+    }
+}
+
+@Composable
+fun HealthReportDialog(
+    report: String,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AssignmentInd,
+                    contentDescription = "Sağlık Raporu",
+                    tint = Color(0xFF673AB7)
+                )
+                Text(
+                    "AI Health Report",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        text = {
+            if (report.isBlank()) {
+                Text(
+                    text = "Report is empty or blank",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 500.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        text = formatHealthReport(report),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.fillMaxWidth(),
+                        lineHeight = 20.sp
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        },
+        modifier = Modifier.fillMaxWidth(0.95f)
+    )
+}
+
+fun formatHealthReport(rawReport: String): String {
+    return rawReport
+        // Remove ALL markdown symbols completely
+        .replace(Regex("#{1,6}\\s*"), "") // Remove all headers
+        .replace(Regex("\\*\\*(.*?)\\*\\*"), "$1") // Remove bold markdown
+        .replace(Regex("\\*(.*?)\\*"), "$1") // Remove italic markdown
+        .replace(Regex("\\*+"), "") // Remove any remaining asterisks
+        .replace(Regex("_+(.*?)_+"), "$1") // Remove underscores
+        
+        // Fix bullet point formatting
+        .replace(Regex("^•\\s*", RegexOption.MULTILINE), "• ") // Ensure proper bullet spacing
+        .replace(Regex("^-\\s*", RegexOption.MULTILINE), "• ") // Convert dashes to bullets
+        .replace(Regex("^\\s*\\*\\s*", RegexOption.MULTILINE), "• ") // Convert asterisks to bullets
+        
+        // Clean up spacing
+        .replace(Regex("\n{3,}"), "\n\n") // Max 2 newlines
+        .replace(Regex("\\s+\n"), "\n") // Remove trailing spaces
+        
+        // Ensure proper emoji section spacing
+        .replace(Regex("([🎯⚡⚠️💡🏆📈🏥📊📋])"), "\n\n$1")
+        
+        // Clean up and trim
+        .replace(Regex("^\\s+", RegexOption.MULTILINE), "") // Remove leading spaces from lines
+        .trim()
 }
 
