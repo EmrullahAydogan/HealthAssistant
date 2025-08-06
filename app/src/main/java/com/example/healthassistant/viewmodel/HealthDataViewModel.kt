@@ -27,8 +27,11 @@ import com.example.healthassistant.data.ActivitySummaryData
 import com.example.healthassistant.data.HealthConnectAvailability
 import com.example.healthassistant.data.HealthConnectManager
 import com.example.healthassistant.data.LLMManager
+import com.example.healthassistant.data.ModelInitState
+import com.example.healthassistant.common.LLMUtils
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import java.time.Duration
 
 data class HealthDataUiState(
@@ -52,7 +55,9 @@ data class HealthDataUiState(
     val healthReport: String? = null,
     val streamingHealthReport: String = "",
     val canCancelReport: Boolean = false,
-    val showReportDialog: Boolean = false
+    val showReportDialog: Boolean = false,
+    val modelInitState: ModelInitState = ModelInitState.NotInitialized,
+    val isModelReady: Boolean = false
 )
 
 class HealthDataViewModel(
@@ -82,6 +87,16 @@ class HealthDataViewModel(
     init {
         uiState = uiState.copy(availability = healthConnectManager.availability.value)
         checkPermissions()
+        
+        // Observe model initialization state
+        viewModelScope.launch {
+            llmManager.modelInitializationState.collect { initState ->
+                uiState = uiState.copy(
+                    modelInitState = initState,
+                    isModelReady = initState is ModelInitState.Ready
+                )
+            }
+        }
     }
 
     fun checkPermissions() {
@@ -180,17 +195,28 @@ class HealthDataViewModel(
     }
     
     fun generateHealthReport() {
-        // Gallery approach: Use Dispatchers.Default for heavy operations
+        // Check if model is ready first
+        if (!uiState.isModelReady) {
+            uiState = uiState.copy(
+                errorMessage = "Model not ready. Please wait for model initialization to complete or select a model first."
+            )
+            return
+        }
+        
+        // Optimized approach: Use Dispatchers.Default for heavy operations, with timeout
         viewModelScope.launch(Dispatchers.Default) {
             uiState = uiState.copy(
                 isGeneratingReport = true, 
                 canCancelReport = true,
-                showReportDialog = false // Close any open dialog
+                showReportDialog = false,
+                streamingHealthReport = "",
+                healthReport = null, // Clear old report when generating new one
+                errorMessage = null
             )
             
             try {
-                Log.d("HealthDataViewModel", "=== Starting Health Report Generation ===")
-                val healthData = buildHealthDataString()
+                Log.d("HealthDataViewModel", "=== Starting Gemma 3n Health Report Generation ===")
+                val healthData = buildOptimizedHealthDataString()
                 Log.d("HealthDataViewModel", "Health data prepared, length: ${healthData.length}")
                 Log.d("HealthDataViewModel", "Health data preview: ${healthData.take(200)}")
                 
@@ -242,13 +268,7 @@ class HealthDataViewModel(
         uiState = uiState.copy(showReportDialog = false)
     }
     
-    fun clearHealthReport() {
-        uiState = uiState.copy(
-            healthReport = null, 
-            streamingHealthReport = "",
-            showReportDialog = false
-        )
-    }
+    // Removed clearHealthReport() - reports are automatically cleared when generating new ones
     
     private fun buildHealthDataString(): String {
         return buildString {
@@ -307,6 +327,69 @@ class HealthDataViewModel(
                 append("Step goal: ${goals.stepCurrent}/${goals.stepGoal} (${String.format("%.1f", (goals.stepCurrent.toFloat() / goals.stepGoal.toFloat() * 100))}%)\n")
                 append("Calorie goal: ${String.format("%.0f", goals.calorieCurrent)}/${String.format("%.0f", goals.calorieGoal)} (${String.format("%.1f", (goals.calorieCurrent.toFloat() / goals.calorieGoal.toFloat() * 100))}%)\n")
                 append("Active minute goal: ${goals.activeMinuteCurrent}/${goals.activeMinuteGoal} (${String.format("%.1f", (goals.activeMinuteCurrent.toFloat() / goals.activeMinuteGoal.toFloat() * 100))}%)\n")
+            }
+        }
+    }
+    
+    private fun buildOptimizedHealthDataString(): String {
+        // Optimized: Remove emojis and verbose formatting for better LLM processing
+        return buildString {
+            append("DAILY HEALTH METRICS\n\n")
+            
+            // Heart Rate
+            uiState.heartRate?.let { hr ->
+                append("Heart Rate: $hr BPM\n")
+            }
+            
+            // Activity Data - Condensed
+            append("Steps: ${uiState.stepCount}\n")
+            append("Calories: ${String.format("%.0f", uiState.calories)} kcal\n")
+            if (uiState.exerciseCount > 0) {
+                append("Exercise Sessions: ${uiState.exerciseCount}\n")
+            }
+            uiState.activitySummary?.let { summary ->
+                append("Distance: ${String.format("%.1f", summary.distance)} km\n")
+                append("Active Minutes: ${summary.activeMinutes}\n")
+            }
+            append("\n")
+            
+            // Sleep Data - Condensed
+            uiState.sleepDuration?.let { duration ->
+                append("Total Sleep: ${duration.toHours()}h ${duration.toMinutes() % 60}m\n")
+            }
+            uiState.detailedSleep?.let { sleep ->
+                append("Deep Sleep: ${sleep.deepSleep.toHours()}h ${sleep.deepSleep.toMinutes() % 60}m\n")
+                append("REM Sleep: ${sleep.remSleep.toHours()}h ${sleep.remSleep.toMinutes() % 60}m\n")
+            }
+            
+            // Hydration
+            if (uiState.hydration > 0) {
+                append("Water Intake: ${String.format("%.1f", uiState.hydration)} L\n")
+            }
+            
+            // Vital Signs
+            uiState.bloodPressure?.let { (systolic, diastolic) ->
+                append("Blood Pressure: ${systolic.toInt()}/${diastolic.toInt()} mmHg\n")
+            }
+            uiState.oxygenSaturation?.let { spo2 ->
+                append("Blood Oxygen: ${spo2.toInt()}%\n")
+            }
+            
+            // Body Composition
+            uiState.bodyComposition?.let { body ->
+                append("Weight: ${String.format("%.1f", body.weight)} kg\n")
+                append("BMI: ${String.format("%.1f", body.bmi)}\n")
+                body.bodyFatPercentage?.let { fat ->
+                    append("Body Fat: ${String.format("%.1f", fat)}%\n")
+                }
+            }
+            
+            // Goals Progress - Simplified
+            uiState.goalsProgress?.let { goals ->
+                val stepPercent = (goals.stepCurrent.toFloat() / goals.stepGoal.toFloat() * 100).toInt()
+                val caloriePercent = (goals.calorieCurrent.toFloat() / goals.calorieGoal.toFloat() * 100).toInt()
+                append("Step Goal Progress: ${stepPercent}%\n")
+                append("Calorie Goal Progress: ${caloriePercent}%\n")
             }
         }
     }

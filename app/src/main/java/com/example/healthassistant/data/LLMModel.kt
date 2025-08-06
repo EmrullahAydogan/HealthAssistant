@@ -38,6 +38,13 @@ enum class ModelDownloadStatus {
     READY
 }
 
+sealed class ModelInitState {
+    object NotInitialized : ModelInitState()
+    object Initializing : ModelInitState()
+    object Ready : ModelInitState()
+    data class Error(val message: String) : ModelInitState()
+}
+
 data class ModelDownloadProgress(
     val status: ModelDownloadStatus,
     val progress: Float = 0f,
@@ -49,63 +56,45 @@ data class ModelDownloadProgress(
 // Predefined Gemma models
 object GemmaModels {
     val GEMMA_3N_E2B_INT4 = LLMModel(
-        name = "Gemma-3n-E2B-it-int4",
+        name = "Gemma 3n E2B (Balanced)",
         modelId = "google/gemma-3n-E2B-it-litert-preview",
         modelFile = "gemma-3n-E2B-it-int4.task",
-        description = "Preview version of Gemma 3n E2B ready for deployment on Android using the MediaPipe LLM Inference API. The current checkpoint only supports text and vision input, with 4096 context length.",
+        description = "Gemma 3n E2B optimized for balanced health analysis. Good performance with vision support for health charts and data visualization.",
         sizeInBytes = 3136226711L,
         estimatedPeakMemoryInBytes = 5905580032L,
         version = "20250520",
         llmSupportImage = true,
         defaultConfig = ModelConfig(
-            topK = 64,
-            topP = 0.95f,
-            temperature = 1.0f,
-            maxTokens = 4096,
-            accelerators = "cpu,gpu"
+            topK = 35,  // Optimized for Gemma 3n architecture
+            topP = 0.8f,  // Lower for more consistent health analysis
+            temperature = 0.6f,  // Reduced for focused, English responses
+            maxTokens = 1536,  // Balanced for health reports
+            accelerators = "gpu,cpu"  // GPU priority for Gemma 3n
         ),
         url = "https://huggingface.co/google/gemma-3n-E2B-it-litert-preview/resolve/main/gemma-3n-E2B-it-int4.task?download=true"
     )
     
     val GEMMA_3N_E4B_INT4 = LLMModel(
-        name = "Gemma-3n-E4B-it-int4",
+        name = "Gemma 3n E4B (Premium)",
         modelId = "google/gemma-3n-E4B-it-litert-preview",
         modelFile = "gemma-3n-E4B-it-int4.task",
-        description = "Preview version of Gemma 3n E4B ready for deployment on Android using the MediaPipe LLM Inference API. The current checkpoint only supports text and vision input, with 4096 context length.",
+        description = "Premium Gemma 3n E4B for comprehensive health analysis. Higher quality insights with advanced vision capabilities for detailed health data interpretation.",
         sizeInBytes = 4405655031L,
         estimatedPeakMemoryInBytes = 6979321856L,
         version = "20250520",
         llmSupportImage = true,
         defaultConfig = ModelConfig(
-            topK = 64,
-            topP = 0.95f,
-            temperature = 1.0f,
-            maxTokens = 4096,
-            accelerators = "cpu,gpu"
+            topK = 30,  // Lower for more focused, consistent responses
+            topP = 0.75f,  // Reduced for better English consistency
+            temperature = 0.5f,  // Very low temperature for consistent health analysis
+            maxTokens = 1280,  // Optimized for detailed but fast health reports
+            accelerators = "gpu,cpu"  // GPU optimized for Gemma 3n architecture
         ),
         url = "https://huggingface.co/google/gemma-3n-E4B-it-litert-preview/resolve/main/gemma-3n-E4B-it-int4.task?download=true"
     )
     
-    val GEMMA3_1B_IT_Q4 = LLMModel(
-        name = "Gemma3-1B-IT q4",
-        modelId = "litert-community/Gemma3-1B-IT",
-        modelFile = "Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task",
-        description = "A variant of google/Gemma-3-1B-IT with 4-bit quantization ready for deployment on Android using the MediaPipe LLM Inference API",
-        sizeInBytes = 554661246L,
-        estimatedPeakMemoryInBytes = 2147483648L,
-        version = "20250514",
-        llmSupportImage = false,
-        defaultConfig = ModelConfig(
-            topK = 64,
-            topP = 0.95f,
-            temperature = 1.0f,
-            maxTokens = 1024,
-            accelerators = "gpu,cpu"
-        ),
-        url = "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task?download=true"
-    )
     
-    val ALL_MODELS = listOf(GEMMA_3N_E2B_INT4, GEMMA_3N_E4B_INT4)
+    val ALL_MODELS = listOf(GEMMA_3N_E2B_INT4, GEMMA_3N_E4B_INT4)  // Gemma 3n models only, ordered by speed
 }
 
 // Extension function to get model file path

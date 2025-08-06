@@ -13,11 +13,16 @@ import com.google.mediapipe.tasks.genai.llminference.GraphOptions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.delay
 import java.io.File
 import java.util.UUID
+import com.example.healthassistant.common.LLMUtils
 
 // Gallery-style model instance holder
 data class LlmModelInstance(val engine: LlmInference, var session: LlmInferenceSession)
+
+typealias ResultListener = (partialResult: String, done: Boolean) -> Unit
+typealias CleanUpListener = () -> Unit
 
 class LLMManager(private val context: Context) {
     
@@ -29,7 +34,11 @@ class LLMManager(private val context: Context) {
     private val _selectedModel = MutableStateFlow<LLMModel?>(null)
     val selectedModel: StateFlow<LLMModel?> = _selectedModel.asStateFlow()
     
+    private val _modelInitializationState = MutableStateFlow<ModelInitState>(ModelInitState.NotInitialized)
+    val modelInitializationState: StateFlow<ModelInitState> = _modelInitializationState.asStateFlow()
+    
     private var currentLlmInference: LlmInference? = null
+    private val cleanUpListeners: MutableMap<String, CleanUpListener> = mutableMapOf()
     
     companion object {
         private const val TAG = "LLMManager"
@@ -143,9 +152,21 @@ class LLMManager(private val context: Context) {
     
     suspend fun initializeModel(model: LLMModel): Boolean {
         return try {
+            Log.d(TAG, "=== Starting Gemma 3n Model Initialization: ${model.name} ===")
+            _modelInitializationState.value = ModelInitState.Initializing
+            
+            // Check if model is already initialized and ready
+            val currentModel = _selectedModel.value
+            if (currentModel?.name == model.name && currentModel.instance != null) {
+                Log.d(TAG, "Model ${model.name} already initialized, skipping...")
+                _modelInitializationState.value = ModelInitState.Ready
+                return true
+            }
+            
             val modelFile = File(model.getFilePath(context))
             if (!modelFile.exists()) {
                 Log.e(TAG, "Model ${model.name} file does not exist")
+                _modelInitializationState.value = ModelInitState.Error("Model file not found")
                 updateModelProgress(model.name, ModelDownloadProgress(
                     status = ModelDownloadStatus.NOT_DOWNLOADED
                 ))
@@ -187,23 +208,38 @@ class LLMManager(private val context: Context) {
             Log.d(TAG, "Initializing model at path: $modelPath")
             Log.d(TAG, "Model config - MaxTokens: ${model.defaultConfig.maxTokens}, TopK: ${model.defaultConfig.topK}, Temp: ${model.defaultConfig.temperature}")
             
-            // Gallery approach: Inference-level configuration (model path, max tokens, backend, max images)
+            // Gemma 3n specific optimizations: GPU backend with optimal settings for health analysis
+            val preferredBackend = LlmInference.Backend.GPU
+            
+            // Gemma 3n specific token limits based on model variant
+            val optimizedMaxTokens = when {
+                model.name.contains("E4B") -> 1280  // Premium model: higher quality, controlled length
+                model.name.contains("E2B") -> 1536  // Balanced model: good balance
+                else -> model.defaultConfig.maxTokens
+            }
+            
             val llmOptions = LlmInference.LlmInferenceOptions.builder()
                 .setModelPath(modelPath)
-                .setMaxTokens(model.defaultConfig.maxTokens)
-                .setPreferredBackend(LlmInference.Backend.GPU)
-                .setMaxNumImages(if (model.llmSupportImage) 8 else 0)
+                .setMaxTokens(optimizedMaxTokens)
+                .setPreferredBackend(preferredBackend)
+                .setMaxNumImages(if (model.llmSupportImage) 3 else 0) // Optimized for Gemma 3n vision processing
                 .build()
             
-            Log.d(TAG, "Creating LlmInference with Gallery-style configuration...")
+            Log.d(TAG, "Creating Gemma 3n LlmInference with optimized configuration (maxTokens: $optimizedMaxTokens)...")
             currentLlmInference = LlmInference.createFromOptions(context, llmOptions)
-            Log.d(TAG, "LlmInference created successfully")
+            Log.d(TAG, "Gemma 3n LlmInference created successfully")
             
-            // Gallery approach: Create session with GraphOptions - CRITICAL for signature validation
+            // Gemma 3n specific session configuration - optimized for consistent English health analysis
+            val gemma3nOptimizedTemp = when {
+                model.name.contains("E4B") -> 0.5f  // Premium: very focused responses
+                model.name.contains("E2B") -> 0.6f  // Balanced: good consistency
+                else -> model.defaultConfig.temperature
+            }
+            
             val sessionOptions = LlmInferenceSession.LlmInferenceSessionOptions.builder()
                 .setTopK(model.defaultConfig.topK)
                 .setTopP(model.defaultConfig.topP)
-                .setTemperature(model.defaultConfig.temperature)
+                .setTemperature(gemma3nOptimizedTemp)
                 .setGraphOptions(
                     GraphOptions.builder()
                         .setEnableVisionModality(model.llmSupportImage)
@@ -211,25 +247,27 @@ class LLMManager(private val context: Context) {
                 )
                 .build()
             
-            Log.d(TAG, "Creating session with GraphOptions...")
-            val inferenceInstance = currentLlmInference ?: throw IllegalStateException("Inference instance is null")
+            Log.d(TAG, "Creating Gemma 3n session with optimized GraphOptions...")
+            val inferenceInstance = currentLlmInference ?: throw IllegalStateException("Gemma 3n inference instance is null")
             val session = LlmInferenceSession.createFromOptions(inferenceInstance, sessionOptions)
-            Log.d(TAG, "Session created successfully with vision modality: ${model.llmSupportImage}")
+            Log.d(TAG, "Gemma 3n session created successfully with vision modality: ${model.llmSupportImage}, temp: $gemma3nOptimizedTemp")
             
             // Store both inference and session
-            _selectedModel.value = model.copy(instance = LlmModelInstance(inferenceInstance, session))
+            val modelWithInstance = model.copy(instance = LlmModelInstance(inferenceInstance, session))
+            _selectedModel.value = modelWithInstance
             
             updateModelProgress(model.name, ModelDownloadProgress(
                 status = ModelDownloadStatus.READY
             ))
             
-            Log.d(TAG, "Model ${model.name} initialized successfully")
+            _modelInitializationState.value = ModelInitState.Ready
+            Log.d(TAG, "Gemma 3n Model ${model.name} initialized successfully and ready for inference")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize model ${model.name}", e)
             
             // Check if this is a ZIP archive error (corrupted file)
-            val errorMessage = e.message ?: ""
+            val errorMessage = LLMUtils.cleanUpMediaPipeError(e.message ?: "")
             val isCorruptedFile = errorMessage.contains("zip archive", ignoreCase = true) ||
                                  errorMessage.contains("MediaPipeTAsksStatus='104'", ignoreCase = true) ||
                                  errorMessage.contains("Unable to open", ignoreCase = true)
@@ -259,7 +297,52 @@ class LLMManager(private val context: Context) {
             // Clean up failed instance
             cleanupCurrentModel()
             _selectedModel.value = null
+            _modelInitializationState.value = ModelInitState.Error(errorMessage)
             false
+        }
+    }
+    
+    
+    fun runHealthInference(
+        model: LLMModel,
+        healthData: String,
+        resultListener: ResultListener,
+        cleanUpListener: CleanUpListener
+    ) {
+        val instance = model.instance as? LlmModelInstance ?: return
+        
+        // Set cleanup listener
+        cleanUpListeners[model.name] = cleanUpListener
+        
+        // Use optimized prompt from LLMUtils
+        val optimizedPrompt = LLMUtils.createOptimizedHealthPrompt(healthData)
+        
+        Log.d(TAG, "Starting optimized health report generation, prompt length: ${optimizedPrompt.length}")
+        
+        try {
+            val session = instance.session
+            session.addQueryChunk(optimizedPrompt)
+            
+            val processedResultCallback: ResultListener = { partialResult: String, done: Boolean ->
+                val processed = if (done) {
+                    val cleanedResult = LLMUtils.processHealthResponse(partialResult)
+                    // Validate response quality
+                    if (LLMUtils.validateHealthResponse(cleanedResult)) {
+                        cleanedResult
+                    } else {
+                        Log.w(TAG, "Response validation failed, using original")
+                        cleanedResult // Still use processed version even if validation fails
+                    }
+                } else {
+                    partialResult
+                }
+                resultListener(processed, done)
+            }
+            
+            session.generateResponseAsync(processedResultCallback)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in health inference", e)
+            resultListener("Error generating report: ${e.message}", true)
         }
     }
     
@@ -282,77 +365,43 @@ class LLMManager(private val context: Context) {
                 onPartialResult("Model not initialized. Please initialize the model first.", true)
                 return
             }
-            Log.d(TAG, "Model instance found: ${model.name}")
             
-            val prompt = """
-                🏥 **HEALTH ASSISTANT AI** 🏥
-                
-                Hello! I'm your personal health data analyst. I specialize in interpreting wearable sensor data to provide you with actionable insights about your health and wellness.
-                
-                📊 **ANALYZING YOUR HEALTH DATA:**
-                $healthData
-                
-                📋 **MY ANALYSIS APPROACH:**
-                I'll examine your data using evidence-based health metrics and provide you with a comprehensive yet easy-to-understand report.
-                
-                Please provide your analysis in the following structured format:
-                
-                🎯 **OVERALL HEALTH STATUS**
-                • [Brief assessment of current health state]
-                
-                ⚡ **KEY HIGHLIGHTS**
-                • [2-3 positive findings from the data]
-                
-                ⚠️ **AREAS FOR ATTENTION**
-                • [Any metrics that need monitoring or improvement]
-                
-                💡 **SMART RECOMMENDATIONS**
-                • [3-4 specific, actionable suggestions]
-                
-                🏆 **CELEBRATION WORTHY**
-                • [Achievements and positive trends to acknowledge]
-                
-                📈 **HEALTH INSIGHTS**
-                • [Any interesting patterns or correlations in the data]
-                
-                Use emojis, bullet points, and clear formatting. Be encouraging yet honest. Focus on actionable insights rather than medical diagnosis.
-            """.trimIndent()
+            // Wait for model to be ready (similar to Gallery approach)
+            while (model.instance == null) {
+                delay(100)
+            }
+            delay(200) // Short delay for stability
             
-            Log.d(TAG, "Starting async health report generation, prompt length: ${prompt.length}")
-            
-            // Gallery approach: Use async streaming for real-time updates
-            instance.session.addQueryChunk(prompt)
+            Log.d(TAG, "Model instance ready: ${model.name}")
             
             var accumulatedResult = StringBuilder()
             
-            val resultCallback: (String, Boolean) -> Unit = { partialResult: String, done: Boolean ->
-                Log.d(TAG, "=== LLM Callback ===")
-                Log.d(TAG, "done: $done, partial length: ${partialResult.length}")
-                Log.d(TAG, "partial content: '${partialResult.take(50)}'")
-                
-                // MediaPipe gives incremental chunks - accumulate them
-                if (partialResult.isNotBlank()) {
-                    accumulatedResult.append(partialResult)
-                    Log.d(TAG, "Accumulated total length: ${accumulatedResult.length}")
-                }
-                
-                if (done) {
-                    val finalResult = accumulatedResult.toString()
-                    Log.d(TAG, "FINAL RESULT - length: ${finalResult.length}")
-                    Log.d(TAG, "Final preview: ${finalResult.take(200)}")
+            runHealthInference(
+                model = model,
+                healthData = healthData,
+                resultListener = { partialResult: String, done: Boolean ->
+                    Log.d(TAG, "=== Optimized LLM Callback ===")
+                    Log.d(TAG, "done: $done, partial length: ${partialResult.length}")
                     
-                    if (finalResult.isNotBlank()) {
-                        onPartialResult(finalResult, true)
-                    } else {
-                        onPartialResult("No response generated. Please try again.", true)
+                    if (partialResult.isNotBlank()) {
+                        accumulatedResult.append(partialResult)
                     }
+                    
+                    if (done) {
+                        val finalResult = accumulatedResult.toString()
+                        Log.d(TAG, "FINAL RESULT - length: ${finalResult.length}")
+                        
+                        if (finalResult.isNotBlank()) {
+                            onPartialResult(finalResult, true)
+                        } else {
+                            onPartialResult("No response generated. Please try again.", true)
+                        }
+                    }
+                },
+                cleanUpListener = {
+                    Log.d(TAG, "Health inference cleanup completed")
                 }
-                
-                Log.d(TAG, "Callback processing completed")
-            }
-            
-            // Use async streaming like Gallery
-            instance.session.generateResponseAsync(resultCallback)
+            )
             
         } catch (e: Exception) {
             Log.e(TAG, "Error generating health report", e)
@@ -367,9 +416,54 @@ class LLMManager(private val context: Context) {
             if (instance != null) {
                 Log.d(TAG, "Cancelling health report generation")
                 instance.session.cancelGenerateResponseAsync()
+                
+                // Trigger cleanup listener
+                model.name.let { modelName ->
+                    cleanUpListeners[modelName]?.invoke()
+                    cleanUpListeners.remove(modelName)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error cancelling health report generation", e)
+        }
+    }
+    
+    fun resetSession(model: LLMModel) {
+        try {
+            Log.d(TAG, "Resetting Gemma 3n session for model '${model.name}'")
+            
+            val instance = model.instance as? LlmModelInstance ?: return
+            val session = instance.session
+            session.close()
+            
+            val inference = instance.engine
+            
+            // Apply same Gemma 3n optimizations as in initialization
+            val gemma3nOptimizedTemp = when {
+                model.name.contains("E4B") -> 0.5f  // Premium: very focused responses
+                model.name.contains("E2B") -> 0.6f  // Balanced: good consistency
+                else -> model.defaultConfig.temperature
+            }
+            
+            val sessionOptions = LlmInferenceSession.LlmInferenceSessionOptions.builder()
+                .setTopK(model.defaultConfig.topK)
+                .setTopP(model.defaultConfig.topP)
+                .setTemperature(gemma3nOptimizedTemp)
+                .setGraphOptions(
+                    GraphOptions.builder()
+                        .setEnableVisionModality(model.llmSupportImage)
+                        .build()
+                )
+                .build()
+                
+            val newSession = LlmInferenceSession.createFromOptions(inference, sessionOptions)
+            
+            // Update the instance with the new session
+            _selectedModel.value = model.copy(instance = LlmModelInstance(inference, newSession))
+            
+            Log.d(TAG, "Gemma 3n session reset completed with optimized temperature: $gemma3nOptimizedTemp")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to reset Gemma 3n session", e)
         }
     }
     
@@ -381,6 +475,11 @@ class LLMManager(private val context: Context) {
                 Log.d(TAG, "Cleaning up session and inference")
                 instance.session.close()
                 instance.engine.close()
+                
+                // Clean up listener
+                model.name.let { modelName ->
+                    cleanUpListeners.remove(modelName)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error during model cleanup", e)
@@ -441,6 +540,11 @@ class LLMManager(private val context: Context) {
     
     fun setSelectedModel(model: LLMModel?) {
         _selectedModel.value = model
+    }
+    
+    fun isModelReady(): Boolean {
+        val model = _selectedModel.value
+        return model?.instance != null && _modelInitializationState.value is ModelInitState.Ready
     }
     
     fun setHuggingFaceToken(token: String) {

@@ -161,8 +161,7 @@ fun DashboardScreen(
                                 onCancelReport = { viewModel.cancelHealthReport() },
                                 onReadReport = { viewModel.showHealthReport() },
                                 showReportDialog = uiState.showReportDialog,
-                                onHideReport = { viewModel.hideHealthReport() },
-                                onClearReport = { viewModel.clearHealthReport() }
+                                onHideReport = { viewModel.hideHealthReport() }
                             )
                         }
                     }
@@ -195,8 +194,7 @@ fun DashboardContent(
     onCancelReport: () -> Unit,
     onReadReport: () -> Unit,
     showReportDialog: Boolean,
-    onHideReport: () -> Unit,
-    onClearReport: () -> Unit
+    onHideReport: () -> Unit
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -349,8 +347,7 @@ fun DashboardContent(
             onCancelReport = onCancelReport,
             onReadReport = onReadReport,
             showReportDialog = showReportDialog,
-            onHideReport = onHideReport,
-            onClearReport = onClearReport
+            onHideReport = onHideReport
         )
 
         if (isLoading) {
@@ -961,8 +958,7 @@ fun LLMHealthReportCard(
     onCancelReport: () -> Unit,
     onReadReport: () -> Unit,
     showReportDialog: Boolean,
-    onHideReport: () -> Unit,
-    onClearReport: () -> Unit
+    onHideReport: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -995,7 +991,7 @@ fun LLMHealthReportCard(
             Spacer(modifier = Modifier.height(12.dp))
             
             Text(
-                text = "Your selected LLM model can analyze your health data and generate a personalized health report.",
+                text = "Your selected Gemma 3n model can analyze your health data and generate a personalized health report using AI.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth()
@@ -1041,7 +1037,7 @@ fun LLMHealthReportCard(
                     }
                 }
                 
-                // When report exists - show read, generate new, and clear buttons
+                // When report exists - show read and generate new buttons (clear removed)
                 healthReport != null -> {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1063,15 +1059,15 @@ fun LLMHealthReportCard(
                         }
                     }
                     
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     
-                    Button(
-                        onClick = onClearReport,
+                    Text(
+                        text = "💡 Generating a new report will replace the current one",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                    ) {
-                        Text("Clear Report")
-                    }
+                        textAlign = TextAlign.Center
+                    )
                 }
                 
                 // When no report - show only generate button

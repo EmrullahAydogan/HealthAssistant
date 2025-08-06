@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.healthassistant.data.LLMManager
 import com.example.healthassistant.data.LLMModel
 import com.example.healthassistant.data.ModelDownloadProgress
+import com.example.healthassistant.data.ModelInitState
 import com.example.healthassistant.data.getFilePath
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +25,8 @@ class ModelsViewModel(
     
     private val _selectedHealthModel = MutableStateFlow<LLMModel?>(null)
     val selectedHealthModel: StateFlow<LLMModel?> = _selectedHealthModel.asStateFlow()
+    
+    val modelInitState: StateFlow<ModelInitState> = llmManager.modelInitializationState
     
     init {
         loadSelectedModel()
@@ -50,11 +53,21 @@ class ModelsViewModel(
     fun setSelectedHealthModel(model: LLMModel?) {
         _selectedHealthModel.value = model
         saveSelectedModel(model)
+        llmManager.setSelectedModel(model)
         
-        // If a model is selected, initialize it
+        // If a model is selected, initialize it asynchronously
         model?.let { selectedModel ->
             viewModelScope.launch {
-                llmManager.initializeModel(selectedModel)
+                try {
+                    val success = llmManager.initializeModel(selectedModel)
+                    if (success) {
+                        android.util.Log.d("ModelsViewModel", "Model ${selectedModel.name} initialized successfully")
+                    } else {
+                        android.util.Log.e("ModelsViewModel", "Failed to initialize model ${selectedModel.name}")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("ModelsViewModel", "Exception during model initialization", e)
+                }
             }
         }
     }
