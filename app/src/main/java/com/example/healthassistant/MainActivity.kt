@@ -7,6 +7,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.healthassistant.data.HealthConnectManager
 import com.example.healthassistant.data.LLMManager
@@ -22,6 +25,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var healthDataViewModel: HealthDataViewModel
     private lateinit var modelsViewModel: ModelsViewModel
     
+    // Theme state
+    private var isDarkTheme by mutableStateOf(false)
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
@@ -32,14 +38,18 @@ class MainActivity : ComponentActivity() {
         
         enableEdgeToEdge()
         setContent {
-            HealthAssistantTheme {
+            HealthAssistantTheme(
+                darkTheme = isDarkTheme
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     HealthAssistantApp(
                         healthDataViewModel = healthDataViewModel,
-                        modelsViewModel = modelsViewModel
+                        modelsViewModel = modelsViewModel,
+                        isDarkTheme = isDarkTheme,
+                        onThemeToggle = { isDarkTheme = !isDarkTheme }
                     )
                 }
             }

@@ -46,7 +46,9 @@ sealed class Screen(
 @Composable
 fun HealthAssistantApp(
     healthDataViewModel: HealthDataViewModel,
-    modelsViewModel: ModelsViewModel
+    modelsViewModel: ModelsViewModel,
+    isDarkTheme: Boolean,
+    onThemeToggle: () -> Unit
 ) {
     val navController = rememberNavController()
     val screens = listOf(Screen.Dashboard, Screen.Models)
@@ -91,7 +93,11 @@ fun HealthAssistantApp(
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Dashboard.route) {
-                DashboardScreen(viewModel = healthDataViewModel)
+                DashboardScreen(
+                    viewModel = healthDataViewModel,
+                    isDarkTheme = isDarkTheme,
+                    onThemeToggle = onThemeToggle
+                )
             }
             
             composable(Screen.Models.route) {

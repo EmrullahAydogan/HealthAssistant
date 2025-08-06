@@ -35,6 +35,11 @@ import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.AssignmentInd
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.HealthAndSafety
+import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.SmallFloatingActionButton
@@ -65,9 +70,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.shadow
 import com.example.healthassistant.data.HealthConnectAvailability
 import com.example.healthassistant.ui.theme.onWarningContainer
 import com.example.healthassistant.ui.theme.warningContainer
+import com.example.healthassistant.ui.theme.getHealthMetricColors
+import com.example.healthassistant.ui.theme.HealthMetricColors
 import com.example.healthassistant.data.BodyCompositionData
 import com.example.healthassistant.data.DetailedSleepData
 import com.example.healthassistant.data.GoalsProgressData
@@ -80,7 +89,9 @@ import kotlin.math.roundToInt
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
-    viewModel: HealthDataViewModel
+    viewModel: HealthDataViewModel,
+    isDarkTheme: Boolean,
+    onThemeToggle: () -> Unit
 ) {
     val uiState = viewModel.uiState
     val snackbarHostState = remember { SnackbarHostState() }
@@ -100,31 +111,41 @@ fun DashboardScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Health Assistant", color = Color.White) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                actions = {
-                    IconButton(onClick = { viewModel.refreshData() }) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = "Refresh Data",
-                            tint = Color.White
-                        )
-                    }
-                }
+            PremiumTopAppBar(
+                onRefresh = { viewModel.refreshData() },
+                isLoading = uiState.isLoading,
+                isDarkTheme = isDarkTheme,
+                onThemeToggle = onThemeToggle
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = if (isDarkTheme) {
+                            listOf(
+                                MaterialTheme.colorScheme.background,
+                                MaterialTheme.colorScheme.surface
+                            )
+                        } else {
+                            listOf(
+                                Color(0xFFF8F9FA),
+                                Color(0xFFE9ECEF)
+                            )
+                        }
+                    )
+                )
         ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
             item {
                 when (uiState.availability) {
                     HealthConnectAvailability.NOT_SUPPORTED -> {
@@ -167,8 +188,112 @@ fun DashboardScreen(
                     }
                 }
             }
+            }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PremiumTopAppBar(
+    onRefresh: () -> Unit,
+    isLoading: Boolean,
+    isDarkTheme: Boolean,
+    onThemeToggle: () -> Unit
+) {
+    TopAppBar(
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(vertical = 4.dp)
+            ) {
+                // Premium health icon with gradient background
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFF4CAF50).copy(alpha = 0.2f),
+                                    Color(0xFF2196F3).copy(alpha = 0.2f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .padding(8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.HealthAndSafety,
+                        contentDescription = "Health Assistant",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                
+                Column {
+                    Text(
+                        "Health Assistant",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "AI-Powered Health Analytics",
+                        color = Color.White.copy(alpha = 0.8f),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.primary
+        ),
+        actions = {
+            // Theme toggle switch
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    if (isDarkTheme) Icons.Default.DarkMode else Icons.Default.LightMode,
+                    contentDescription = if (isDarkTheme) "Dark Mode" else "Light Mode",
+                    tint = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.size(20.dp)
+                )
+                Switch(
+                    checked = isDarkTheme,
+                    onCheckedChange = { onThemeToggle() },
+                    modifier = Modifier.size(40.dp)
+                )
+                
+                Spacer(modifier = Modifier.width(8.dp))
+                
+                IconButton(
+                    onClick = onRefresh,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(
+                            Color.White.copy(alpha = 0.1f),
+                            RoundedCornerShape(12.dp)
+                        )
+                ) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "Refresh Data",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        },
+        modifier = Modifier.shadow(
+            elevation = 8.dp,
+            spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+        )
+    )
 }
 
 @Composable
@@ -196,15 +321,15 @@ fun DashboardContent(
     showReportDialog: Boolean,
     onHideReport: () -> Unit
 ) {
+    val healthColors = getHealthMetricColors()
+    
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "Your Health Data",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center
+        // Premium section header
+        PremiumSectionHeader(
+            title = "Your Health Metrics",
+            subtitle = "Real-time data from your connected devices"
         )
 
         // First row: Heart Rate and Steps
@@ -218,7 +343,7 @@ fun DashboardContent(
                 value = if (isLoading) "..." else (heartRate?.toString() ?: "---"),
                 unit = "BPM",
                 icon = Icons.Default.Favorite,
-                iconColor = Color.Red
+                iconColor = healthColors.heartRate
             )
 
             HealthMetricCard(
@@ -227,7 +352,7 @@ fun DashboardContent(
                 value = if (isLoading) "..." else stepCount.toString(),
                 unit = "steps",
                 icon = Icons.AutoMirrored.Filled.DirectionsWalk,
-                iconColor = Color.Blue
+                iconColor = healthColors.steps
             )
         }
 
@@ -242,7 +367,7 @@ fun DashboardContent(
                 value = if (isLoading) "..." else String.format(Locale.US, "%.0f", calories),
                 unit = "kcal",
                 icon = Icons.Default.LocalFireDepartment,
-                iconColor = Color(0xFFFF6B35)
+                iconColor = healthColors.calories
             )
 
             HealthMetricCard(
@@ -251,7 +376,7 @@ fun DashboardContent(
                 value = if (isLoading) "..." else formatSleepDuration(sleepDuration),
                 unit = "hours",
                 icon = Icons.Default.Hotel,
-                iconColor = Color(0xFF6B73FF)
+                iconColor = healthColors.sleep
             )
         }
 
@@ -266,14 +391,15 @@ fun DashboardContent(
                 value = if (isLoading) "..." else exerciseCount.toString(),
                 unit = "sessions",
                 icon = Icons.Default.FitnessCenter,
-                iconColor = Color(0xFF4CAF50)
+                iconColor = healthColors.exercise
             )
 
             WaterIntakeCard(
                 modifier = Modifier.weight(1f),
                 hydration = hydration,
                 isLoading = isLoading,
-                onAddWater = onAddWater
+                onAddWater = onAddWater,
+                waterColor = healthColors.water
             )
         }
 
@@ -288,7 +414,7 @@ fun DashboardContent(
                 value = if (isLoading) "..." else (oxygenSaturation?.let { "${it.roundToInt()}" } ?: "---"),
                 unit = "%",
                 icon = Icons.Default.Bloodtype,
-                iconColor = Color(0xFFFF5722)
+                iconColor = healthColors.heartRate // Use heart rate color for blood oxygen
             )
 
             if (bloodPressure != null || isLoading) {
@@ -298,7 +424,7 @@ fun DashboardContent(
                     value = if (isLoading) "..." else formatBloodPressure(bloodPressure),
                     unit = "mmHg",
                     icon = Icons.Default.MonitorHeart,
-                    iconColor = Color(0xFFE91E63)
+                    iconColor = healthColors.heartRate // Use heart rate color for blood pressure
                 )
             } else {
                 // Empty space to maintain layout
@@ -310,7 +436,8 @@ fun DashboardContent(
         if (bodyComposition != null || isLoading) {
             BodyCompositionCard(
                 bodyComposition = bodyComposition,
-                isLoading = isLoading
+                isLoading = isLoading,
+                healthColors = healthColors
             )
         }
 
@@ -318,7 +445,8 @@ fun DashboardContent(
         if (detailedSleep != null || isLoading) {
             DetailedSleepCard(
                 detailedSleep = detailedSleep,
-                isLoading = isLoading
+                isLoading = isLoading,
+                healthColors = healthColors
             )
         }
 
@@ -326,7 +454,8 @@ fun DashboardContent(
         if (goalsProgress != null || isLoading) {
             GoalsProgressCard(
                 goalsProgress = goalsProgress,
-                isLoading = isLoading
+                isLoading = isLoading,
+                healthColors = healthColors
             )
         }
 
@@ -334,7 +463,8 @@ fun DashboardContent(
         if (activitySummary != null || isLoading) {
             ActivitySummaryCard(
                 activitySummary = activitySummary,
-                isLoading = isLoading
+                isLoading = isLoading,
+                healthColors = healthColors
             )
         }
 
@@ -380,7 +510,8 @@ fun WaterIntakeCard(
     modifier: Modifier = Modifier,
     hydration: Double,
     isLoading: Boolean,
-    onAddWater: () -> Unit
+    onAddWater: () -> Unit,
+    waterColor: Color
 ) {
     Card(
         modifier = modifier,
@@ -399,13 +530,13 @@ fun WaterIntakeCard(
                     imageVector = Icons.Default.WaterDrop,
                     contentDescription = "Water",
                     modifier = Modifier.size(24.dp),
-                    tint = Color(0xFF2196F3)
+                    tint = waterColor
                 )
                 
                 SmallFloatingActionButton(
                     onClick = onAddWater,
                     modifier = Modifier.size(24.dp),
-                    containerColor = Color(0xFF2196F3)
+                    containerColor = waterColor
                 ) {
                     Icon(
                         Icons.Default.Add,
@@ -459,20 +590,43 @@ fun HealthMetricCard(
     iconColor: Color
 ) {
     Card(
-        modifier = modifier,
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        shape = RoundedCornerShape(12.dp)
+        modifier = modifier.shadow(
+            elevation = 6.dp,
+            shape = RoundedCornerShape(16.dp),
+            spotColor = iconColor.copy(alpha = 0.2f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                modifier = Modifier.size(32.dp),
-                tint = iconColor
-            )
+            // Premium icon background
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                iconColor.copy(alpha = 0.15f),
+                                iconColor.copy(alpha = 0.05f)
+                            )
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    modifier = Modifier.size(28.dp),
+                    tint = iconColor
+                )
+            }
             
             Spacer(modifier = Modifier.height(8.dp))
             
@@ -588,7 +742,8 @@ fun NotInstalledMessage() {
 @Composable
 fun BodyCompositionCard(
     bodyComposition: BodyCompositionData?,
-    isLoading: Boolean
+    isLoading: Boolean,
+    healthColors: HealthMetricColors
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -606,7 +761,7 @@ fun BodyCompositionCard(
                     imageVector = Icons.Default.Scale,
                     contentDescription = "Body Composition",
                     modifier = Modifier.size(24.dp),
-                    tint = Color(0xFF9C27B0)
+                    tint = healthColors.exercise
                 )
                 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -669,7 +824,8 @@ fun BodyMetricItem(
 @Composable
 fun DetailedSleepCard(
     detailedSleep: DetailedSleepData?,
-    isLoading: Boolean
+    isLoading: Boolean,
+    healthColors: HealthMetricColors
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -687,7 +843,7 @@ fun DetailedSleepCard(
                     imageVector = Icons.Default.Nightlight,
                     contentDescription = "Sleep Analysis",
                     modifier = Modifier.size(24.dp),
-                    tint = Color(0xFF3F51B5)
+                    tint = healthColors.sleep
                 )
                 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -755,7 +911,8 @@ fun SleepStageItem(
 @Composable
 fun GoalsProgressCard(
     goalsProgress: GoalsProgressData?,
-    isLoading: Boolean
+    isLoading: Boolean,
+    healthColors: HealthMetricColors
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -773,7 +930,7 @@ fun GoalsProgressCard(
                     imageVector = Icons.Default.EmojiEvents,
                     contentDescription = "Goals Progress",
                     modifier = Modifier.size(24.dp),
-                    tint = Color(0xFFFFD700)
+                    tint = healthColors.calories
                 )
                 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -871,7 +1028,8 @@ fun GoalProgressItem(
 @Composable
 fun ActivitySummaryCard(
     activitySummary: ActivitySummaryData?,
-    isLoading: Boolean
+    isLoading: Boolean,
+    healthColors: HealthMetricColors
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -889,7 +1047,7 @@ fun ActivitySummaryCard(
                     imageVector = Icons.AutoMirrored.Filled.DirectionsRun,
                     contentDescription = "Activity Summary",
                     modifier = Modifier.size(24.dp),
-                    tint = Color(0xFF4CAF50)
+                    tint = healthColors.steps
                 )
                 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -1097,55 +1255,201 @@ fun HealthReportDialog(
     report: String,
     onDismiss: () -> Unit
 ) {
+    val healthColors = getHealthMetricColors()
+    // Full-screen dialog with premium styling
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.AssignmentInd,
-                    contentDescription = "Sağlık Raporu",
-                    tint = Color(0xFF673AB7)
-                )
-                Text(
-                    "AI Health Report",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+            Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // Premium icon with gradient background
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFF673AB7).copy(alpha = 0.2f),
+                                        Color(0xFF9C27B0).copy(alpha = 0.1f)
+                                    )
+                                ),
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                            .padding(12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Analytics,
+                            contentDescription = "AI Health Report",
+                            tint = healthColors.heartRate,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "AI Health Report",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            "Generated by Gemma 3n AI",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Premium divider
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color(0xFF673AB7).copy(alpha = 0.3f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
                 )
             }
         },
         text = {
             if (report.isBlank()) {
-                Text(
-                    text = "Report is empty or blank",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error
-                )
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 500.dp)
-                        .verticalScroll(rememberScrollState())
+                // Premium error state
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text(
-                        text = formatHealthReport(report),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.fillMaxWidth(),
-                        lineHeight = 20.sp
-                    )
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "❌ Report is empty or blank",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Please try generating a new report",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                // Premium report display with card background
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 200.dp, max = 600.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(20.dp)
+                    ) {
+                        Text(
+                            text = formatHealthReport(report),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.fillMaxWidth(),
+                            lineHeight = 24.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF673AB7)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Close Report",
+                    fontWeight = FontWeight.Medium
+                )
             }
         },
-        modifier = Modifier.fillMaxWidth(0.95f)
+        modifier = Modifier
+            .fillMaxWidth(0.98f)
+            .fillMaxSize(0.9f),
+        shape = RoundedCornerShape(20.dp),
+        containerColor = MaterialTheme.colorScheme.background,
+        tonalElevation = 8.dp
     )
+}
+
+@Composable
+fun PremiumSectionHeader(
+    title: String,
+    subtitle: String
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
 }
 
 fun formatHealthReport(rawReport: String): String {
